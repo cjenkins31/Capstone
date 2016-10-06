@@ -1,0 +1,208 @@
+---
+title: "Data Science Capstone Milestone Report"
+author:
+date: "September 3, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+This milestone report is based on exploratory data analysis of the SwifKey data provided in the  Coursera Data Science Capstone. The data consist of 3 text files containing text from three different sources (blogs, news & twitter). 
+
+## Load Libraries
+```{r}
+library(ggplot2)
+library(tm)
+library(RWeka)
+library(SnowballC)
+```
+
+## Read Data
+```{r}
+setwd("C:/Users/Chad/Desktop/Data Science/Capstone/final/en_US")
+# Read the blogs and twitter files
+source.blogs <- readLines("en_US.blogs.txt", encoding="UTF-8")
+source.twitter <- readLines("en_US.twitter.txt", encoding="UTF-8")
+
+# Read the news file. using binary mode as there are special characters in the text
+con <- file("en_US.news.txt", open="rb")
+source.news <- readLines(con, encoding="UTF-8")
+close(con)
+rm(con)
+
+lenBlog <- length(source.blogs)
+lenTwitter <- length(source.twitter)
+lenNews <- length(source.news)
+```
+
+The number of lines in the blogs, twitter, and news text files are `r lenBlog`, `r lenTwitter`, and `r lenNews` respectively.  
+
+## Sample the Data
+```{r}
+setwd("C:/Users/Chad/Desktop/Data Science/Capstone/final/en_US")
+# Binomial sampling function
+sample.fun <- function(data, percent)
+{
+  return(data[as.logical(rbinom(length(data),1,percent))])
+}
+
+# Remove all non english characters
+source.blogs <- iconv(source.blogs, "latin1", "ASCII", sub="")
+source.news <- iconv(source.news, "latin1", "ASCII", sub="")
+source.twitter <- iconv(source.twitter, "latin1", "ASCII", sub="")
+
+# Set the desired sample percentage
+percentage <- 0.05
+
+sample.blogs   <- sample.fun(source.blogs, percentage)
+sample.news   <- sample.fun(source.news, percentage)
+sample.twitter   <- sample.fun(source.twitter, percentage)
+
+dir.create("sample", showWarnings = FALSE)
+
+write(sample.blogs, "sample/sample.blogs.txt")
+write(sample.news, "sample/sample.news.txt")
+write(sample.twitter, "sample/sample.twitter.txt")
+
+remove(source.blogs)
+remove(source.news)
+remove(source.twitter)
+```
+
+## Create & Clean a Corpus
+```{r}
+sample.corpus <- c(sample.blogs,sample.news,sample.twitter)
+my.corpus <- Corpus(VectorSource(list(sample.corpus)))
+
+#Clean the corpus by converting all characters to lowercase, removing the punctuation, removing the numbers and the common english stopwords (and, the, or etc..)
+my.corpus <- tm_map(my.corpus, content_transformer(tolower))
+my.corpus <- tm_map(my.corpus, removePunctuation)
+my.corpus <- tm_map(my.corpus, removeNumbers)
+my.corpus <- tm_map(my.corpus, removeWords, stopwords("english"))
+
+#Remove profanity using the google badwords text file
+googlebadwords <- read.delim("googleBadWords.txt",sep = "\n",header = FALSE)
+googlebadwords <- googlebadwords[,1]
+my.corpus <- tm_map(my.corpus, removeWords, googlebadwords)
+
+#Strip the excess white space
+my.corpus <- tm_map(my.corpus, stripWhitespace)
+
+writeCorpus(my.corpus, filenames="my.corpus.txt")
+my.corpus <- readLines("my.corpus.txt")
+```
+
+## Unigram Analysis
+```{r}
+source("Tokenizer.R")
+unigram.tokenizer <- ngram_tokenizer(1)
+wordlist <- unigram.tokenizer(my.corpus)
+unigram.df <- data.frame(V1 = as.vector(names(table(unlist(wordlist)))), V2 = as.numeric(table(unlist(wordlist))))
+names(unigram.df) <- c("word","freq")
+unigram.df <- unigram.df[with(unigram.df, order(-unigram.df$freq)),]
+row.names(unigram.df) <- NULL
+save(unigram.df, file="unigram.Rda")
+ggplot(head(unigram.df,15), aes(x=reorder(word,-freq), y=freq)) +
+  geom_bar(stat="Identity", fill="blue") +
+  geom_text(aes(label=freq), vjust = -0.5) +
+  ggtitle("Unigrams frequency") +
+  ylab("Frequency") +
+  xlab("Term")
+```
+
+## Bigram Analysis
+```{r}
+bigram.tokenizer <- ngram_tokenizer(2)
+wordlist <- bigram.tokenizer(my.corpus)
+bigram.df <- data.frame(V1 = as.vector(names(table(unlist(wordlist)))), V2 = as.numeric(table(unlist(wordlist))))
+names(bigram.df) <- c("word","freq")
+bigram.df <- bigram.df[with(bigram.df, order(-bigram.df$freq)),]
+row.names(bigram.df) <- NULL
+save(bigram.df, file="bigram.Rda")
+ggplot(head(bigram.df,15), aes(x=reorder(word,-freq), y=freq)) +
+  geom_bar(stat="Identity", fill="blue") +
+  geom_text(aes(label=freq), vjust = -0.5) +
+  ggtitle("Bigrams frequency") +
+  ylab("Frequency") +
+  xlab("Term")
+```
+
+## Trigram Analysis
+```{r}
+trigram.tokenizer <- ngram_tokenizer(3)
+wordlist <- trigram.tokenizer(my.corpus)
+trigram.df <- data.frame(V1 = as.vector(names(table(unlist(wordlist)))), V2 = as.numeric(table(unlist(wordlist))))
+names(trigram.df) <- c("word","freq")
+trigram.df <- trigram.df[with(trigram.df, order(-trigram.df$freq)),]
+row.names(trigram.df) <- NULL
+save(trigram.df, file="trigram.Rda")
+ggplot(head(trigram.df,15), aes(x=reorder(word,-freq), y=freq)) +
+  geom_bar(stat="Identity", fill="blue") +
+  geom_text(aes(label=freq), vjust = -0.5) +
+  ggtitle("Trigrams frequency") +
+  ylab("Frequency") +
+  xlab("Term")
+```
+## 4-gram Analysis
+```{r}
+fourgram.tokenizer <- ngram_tokenizer(4)
+wordlist <- fourgram.tokenizer(my.corpus)
+fourgram.df <- data.frame(V1 = as.vector(names(table(unlist(wordlist)))), V2 = as.numeric(table(unlist(wordlist))))
+names(fourgram.df) <- c("word","freq")
+fourgram.df <- fourgram.df[with(fourgram.df, order(-fourgram.df$freq)),]
+row.names(fourgram.df) <- NULL
+save(fourgram.df, file="fourgram.Rda")
+ggplot(head(fourgram.df,15), aes(x=reorder(word,-freq), y=freq)) +
+  geom_bar(stat="Identity", fill="blue") +
+  geom_text(aes(label=freq), vjust = -0.5) +
+  ggtitle("fourgrams frequency") +
+  ylab("Frequency") +
+  xlab("Term")
+```
+
+
+## Next Steps
+As a next step, a model will be created and integrated into a Shiny app for word prediction.
+
+The Ngram dataframes will be used to calculate the probability of the next word occuring. The input string will be tokenized and the last 2 (or 1 if it's a unigram) words will be isolated and cross checked against the data frames to get the highest probability next word.  The model will be integrated into a shiny application.
+
+## Appendix
+###Ngram_Tokenizer provided publicly by Maciej Szymkiewicz
+```{r}
+ngram_tokenizer <- function(n = 1L, skip_word_none = TRUE, skip_word_number = FALSE) {
+    stopifnot(is.numeric(n), is.finite(n), n > 0)
+    
+    #' To avoid :: calls
+    stri_split_boundaries <- stringi::stri_split_boundaries
+    stri_join <- stringi::stri_join
+    
+    options <- stringi::stri_opts_brkiter(
+        type="word", skip_word_none = skip_word_none, skip_word_number = skip_word_number
+    )
+    
+    #' Tokenizer
+    #' 
+    #' @param x character
+    #' @return character vector with n-grams
+    function(x) {
+        stopifnot(is.character(x))
+    
+        # Split into word tokens
+        tokens <- unlist(stri_split_boundaries(x, opts_brkiter=options))
+        len <- length(tokens)
+    
+        if(all(is.na(tokens)) || len < n) {
+            # If we didn't detect any words or number of tokens is less than n return empty vector
+            character(0)
+        } else {
+            sapply(
+                1:max(1, len - n + 1),
+                function(i) stri_join(tokens[i:min(len, i + n - 1)], collapse = " ")
+            )
+        }
+    }
+}
+```
